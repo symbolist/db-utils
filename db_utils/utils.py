@@ -53,7 +53,7 @@ class Call(object):
         self.success = True
 
 
-def calls_until_success(exceptions=(), delay=0, attempts=3, context_manager=None, setup=None):
+def attempts_until_success(exceptions=(), delay=0, max_attempts=3, context_manager=None, setup=None):
     """
     A generator which can be used to retry a block of code in case the block
     raises an exception.
@@ -61,6 +61,11 @@ def calls_until_success(exceptions=(), delay=0, attempts=3, context_manager=None
     It returns a series of context managers which should be used to wrap the
     block of code.
     
+    Args:
+        exceptions (tuple): A tuple of exceptions to catch.
+        delay (float): Time to wait between attempts.
+        max_attempts (int): Number of times to attempt the block.
+
     For example:
     for call in calls_until_success(exceptions=(DatabaseError,), retries=3):
         with call:
@@ -69,8 +74,11 @@ def calls_until_success(exceptions=(), delay=0, attempts=3, context_manager=None
     
     In case there are any DatabaseErrors, the block will be tried up to 3 times.
     """
-    for attempt in xrange(1, attempts + 1):
-        call = Call(exceptions, setup, context_manager)
+    for attempt in xrange(1, max_attempts + 1):
+        if attempt < max_attempts:
+            call = Call(exceptions, setup, context_manager)
+        else:
+            call = Call((), setup, context_manager)
         yield call
         if call.success is True:
             return

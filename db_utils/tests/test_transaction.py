@@ -42,7 +42,7 @@ class TransactionIsolationLevelsTestCase(TransactionTestCase):
                 self.delay = delay
                 self.status = {}
 
-            @transaction_decorator
+            @transaction_decorator(max_attempts=1)
             def run(self):
                 """A dummy view."""
                 try:
@@ -86,12 +86,12 @@ class TransactionIsolationLevelsTestCase(TransactionTestCase):
             """Just return."""
             return
 
-        commit_on_success_with_read_committed(do_nothing)()
+        commit_on_success_with_read_committed()(do_nothing)()
 
         with commit_on_success():
-            commit_on_success_with_read_committed(do_nothing)()
+            commit_on_success_with_read_committed()(do_nothing)()
 
         with self.assertRaises(TransactionManagementError):
             with commit_on_success():
                 with commit_on_success():
-                    commit_on_success_with_read_committed(do_nothing)()
+                    commit_on_success_with_read_committed()(do_nothing)()

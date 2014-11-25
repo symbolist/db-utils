@@ -4,7 +4,7 @@ import ddt
 
 from django.test import TestCase
 
-from db_utils.utils import Call, calls_until_success
+from db_utils.utils import Call, attempts_until_success
 
 
 def mock_func():
