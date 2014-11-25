@@ -160,19 +160,19 @@ def commit_on_success_with_read_committed(exceptions=DATABASE_EXCEPTIONS, delay=
     )
 
 
-def repeatable_read_transactions(exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
+def repeatable_read_transactions(exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
     """
     """
     return attempts_until_success(
-        exceptions=exceptions, delay=delay, max_attempts=attempts,
+        exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
         context_manager=transaction.commit_on_success, setup=set_mode_repeatable_read,
     )
 
 
-def read_committed_transactions(exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
+def read_committed_transactions(exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
     """
     """
     return attempts_until_success(
-        exceptions=exceptions, delay=delay, max_attempts=max_attempts,
+        exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
         context_manager=transaction.commit_on_success, setup=set_mode_read_committed,
     )

@@ -8,17 +8,20 @@ import unittest
 from django.contrib.auth.models import User
 from django.db import connection, IntegrityError
 from django.db.transaction import commit_on_success, TransactionManagementError
-from django.test import TransactionTestCase
+from django.test import TestCase, TransactionTestCase
 
 from db_utils.transaction import (
-    commit_on_success_with_read_committed, commit_on_success_with_repeatable_read
+    commit_on_success_with_repeatable_read, commit_on_success_with_read_committed,
+    repeatable_read_transactions, read_committed_transactions,
 )
+
+from test_utils import mock_func
 
 
 @ddt.ddt
-class TransactionIsolationLevelsTestCase(TransactionTestCase):
+class TransactionDecoratorTestCase(TransactionTestCase):
     """
-    Tests the effects of changing MYSQL transaction isolation level to READ COMMITTED instead of REPEATABLE READ.
+    Tests the decorators.
     """
 
     @ddt.data(

@@ -27,7 +27,7 @@ class Call(object):
     
     def __enter__(self):
         if self.setup:
-            setup()
+            self.setup()
         if self.sub_context_manager:
             self.sub_context_manager.__enter__()
         return self
@@ -53,7 +53,7 @@ class Call(object):
         self.success = True
 
 
-def attempts_until_success(exceptions=(), delay=0, max_attempts=3, context_manager=None, setup=None):
+def attempts_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, context_manager=None, setup=None):
     """
     A generator which can be used to retry a block of code in case the block
     raises an exception.
@@ -76,7 +76,7 @@ def attempts_until_success(exceptions=(), delay=0, max_attempts=3, context_manag
     """
     for attempt in xrange(1, max_attempts + 1):
         if attempt < max_attempts:
-            call = Call(exceptions, setup, context_manager)
+            call = Call(exceptions_to_retry, setup, context_manager)
         else:
             call = Call((), setup, context_manager)
         yield call

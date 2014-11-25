@@ -128,3 +128,35 @@ class CallTestCase(TestCase):
                 mock_func()
 
         self.assertFalse(call.success)
+
+
+@ddt.ddt
+class RetryPatternTestCase(TestCase):
+    """
+    Tests the retry pattern.
+    """
+
+    @ddt.data(
+        ((ValueError, ValueError), (ValueError,)),
+        ((ValueError, ValueError), (ValueError,)),
+    )
+    @ddt.unpack
+    def test_success(self, exceptions_to_raise, exceptions_to_retry):
+
+        mock_func.exceptions_to_raise = exceptions_to_raise
+        for attempt in attempts_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
+            with attempt:
+                mock_func()
+
+    @ddt.data(
+        ((ValueError, ValueError), (IndexError,), ValueError),
+        ((ValueError, ValueError, ValueError, ValueError), (ValueError,), ValueError),
+    )
+    @ddt.unpack
+    def test_failure(self, exceptions_to_raise, exceptions_to_retry, exception_to_assert):
+
+        mock_func.exceptions_to_raise = exceptions_to_raise
+        with self.assertRaises(exception_to_assert):
+            for attempt in attempts_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
+                with attempt:
+                    mock_func()
