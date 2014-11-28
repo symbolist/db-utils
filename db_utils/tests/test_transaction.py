@@ -89,12 +89,12 @@ class TransactionDecoratorTestCase(TransactionTestCase):
             """Just return."""
             return
 
-        commit_on_success_with_read_committed()(do_nothing)()
+        commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()
 
         with commit_on_success():
-            commit_on_success_with_read_committed()(do_nothing)()
+            commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()
 
         with self.assertRaises(TransactionManagementError):
             with commit_on_success():
                 with commit_on_success():
-                    commit_on_success_with_read_committed()(do_nothing)()
+                    commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()

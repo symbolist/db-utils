@@ -6,7 +6,7 @@ DatabaseErrors.
 
 import logging
 
-from functools import wraps
+from functools import partial, wraps
 
 from django.db import connection, transaction, IntegrityError
 
@@ -18,26 +18,33 @@ log = logging.getLogger(__name__)
 DATABASE_EXCEPTIONS = (IntegrityError,)
 DELAY = 0.1
 MAX_ATTEMPTS = 3
+TRANSACTIONS_TO_CLOSE = 0
 
 
-def commit_open_transactions():
+def commit_open_transactions(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     """
-    Commit an open transaction.
-    
-    Raises TransactionManagementError if more than 1 level of transactions
-    are open.
+    Commit upto 'transactions_to_close' open transactions.
+
+    Args:
+        transactions_to_close (int): number of transactions to close.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
     """
-    # The isolation level cannot be changed while a transaction is in
-    # progress. So we close any existing one.
     if connection.transaction_state:
-        if len(connection.transaction_state) == 1:
-            connection.commit()
-        elif len(connection.transaction_state) > 1:
-            raise transaction.TransactionManagementError('Cannot change isolation level. '
-                                                         'More than 1 level of nested transactions.')
+        if len(connection.transaction_state) <= transactions_to_close:
+            while len(connection.transaction_state) > 1:
+                connection.commit()
+        else:
+            raise transaction.TransactionManagementError(
+                '{0} nested transactions are open. Can only close {1}'.format(
+                    len(connection.transaction_state), transactions_to_close
+                )
+            )
 
 
-def set_mode_read_committed():
+def set_mode_read_committed(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     """
     Commit any open transaction and if database is MySQL set isolation level
     of next transaction to READ COMMITTED.
@@ -46,7 +53,9 @@ def set_mode_read_committed():
     are open.
     """
 
-    commit_open_transactions()
+    # The isolation level cannot be changed while a transaction is in
+    # progress. So we close any existing ones.
+    commit_open_transactions(transactions_to_close=transactions_to_close)
 
     if connection.vendor == 'mysql':
         # The isolation level cannot be changed while a transaction is in
@@ -55,7 +64,7 @@ def set_mode_read_committed():
         cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
 
-def set_mode_repeatable_read():
+def set_mode_repeatable_read(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     """
     Commit any open transaction but assume that the default isolation level
     of MySQL is REPEATABLE READ and so do not try to set it again.
@@ -63,7 +72,13 @@ def set_mode_repeatable_read():
     Raises TransactionManagementError if more than 1 level of transactions
     are open.
     """
-    commit_open_transactions()
+    # The isolation level cannot be changed while a transaction is in
+    # progress. So we close any existing ones.
+    commit_open_transactions(transactions_to_close=transactions_to_close)
+
+    if connection.vendor == 'mysql':
+        cursor = connection.cursor()
+        cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
 
 
 def commit_on_success_with_isolation_level(  # pylint: disable=invalid-name
@@ -111,7 +126,10 @@ def commit_on_success_with_isolation_level(  # pylint: disable=invalid-name
     return decorator
 
 
-def commit_on_success_with_repeatable_read(exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):  # pylint: disable=invalid-name
+def commit_on_success_with_repeatable_read(
+        exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS,
+        transactions_to_close=TRANSACTIONS_TO_CLOSE,
+    ):
     """
     Decorator factory which sets isolation level to REPEATABLE READ, and
     executes the wrapped function in a commit_on_success context manager.
@@ -129,14 +147,17 @@ def commit_on_success_with_repeatable_read(exceptions=DATABASE_EXCEPTIONS, delay
         max_attempts (int): Number of times to attempt the decorated function.
     """
     return commit_on_success_with_isolation_level(
-        isolation_level_setup_func=set_mode_repeatable_read,
+        isolation_level_setup=partial(set_mode_repeatable_read, transactions_to_close),
         exceptions=exceptions,
         delay=delay,
         max_attempts=max_attempts,
     )
 
 
-def commit_on_success_with_read_committed(exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):  # pylint: disable=invalid-name
+def commit_on_success_with_read_committed(
+        exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS,
+        transactions_to_close=TRANSACTIONS_TO_CLOSE,
+    ):
     """
     Decorator factory which sets isolation level to READ COMMITTED, and
     executes the wrapped function in a commit_on_success context manager.
@@ -153,26 +174,34 @@ def commit_on_success_with_read_committed(exceptions=DATABASE_EXCEPTIONS, delay=
     """
 
     return commit_on_success_with_isolation_level(
-        isolation_level_setup_func=set_mode_read_committed,
+        isolation_level_setup=partial(set_mode_read_committed, transactions_to_close),
         exceptions=exceptions,
         delay=delay,
         max_attempts=max_attempts,
     )
 
 
-def repeatable_read_transactions(exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
+def repeatable_read_transactions(
+        exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS,
+        transactions_to_close=TRANSACTIONS_TO_CLOSE,
+    ):
     """
     """
+    setup = partial(set_mode_repeatable_read, transactions_to_close)
     return attempts_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
-        context_manager=transaction.commit_on_success, setup=set_mode_repeatable_read,
+        context_manager=transaction.commit_on_success, setup=setup,
     )
 
 
-def read_committed_transactions(exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS):
+def read_committed_transactions(
+        exceptions_to_retry=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS,
+        transactions_to_close=TRANSACTIONS_TO_CLOSE,
+    ):
     """
     """
+    setup = partial(set_mode_read_committed, transactions_to_close)
     return attempts_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
-        context_manager=transaction.commit_on_success, setup=set_mode_read_committed,
+        context_manager=transaction.commit_on_success, setup=setup,
     )
