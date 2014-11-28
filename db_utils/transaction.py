@@ -64,6 +64,8 @@ def set_mode_read_committed(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     if connection.vendor == 'mysql':
         cursor = connection.cursor()
         cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+    else:
+        log.warning('Not MySQL. Unable to change transaction isolation level to READ COMMITTED.')
 
 
 def set_mode_repeatable_read(transactions_to_close=TRANSACTIONS_TO_CLOSE):
@@ -85,6 +87,8 @@ def set_mode_repeatable_read(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     if connection.vendor == 'mysql':
         cursor = connection.cursor()
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    else:
+        log.warning('Not MySQL. Unable to change transaction isolation level to REPEATABLE READ.')
 
 
 def commit_on_success_with_isolation_level(
@@ -119,10 +123,10 @@ def commit_on_success_with_isolation_level(
                         return func(*args, **kwargs)
                 except exceptions:
                     if attempt == max_attempts:
-                        log.exception('Error in %s on try %d. Raising.', func_path, attempt)
+                        log.exception('Error in %s on attempt %d. Raising.', func_path, attempt)
                         raise
                     else:
-                        log.exception('Error in %s on try %d. Retrying.', func_path, attempt)
+                        log.exception('Error in %s on attempt %d. Retrying.', func_path, attempt)
 
                 if delay > 0:
                     time.sleep(delay)

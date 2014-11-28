@@ -2,6 +2,11 @@
 This module implements a context manager and generator used in a pattern for
 retrying blocks of code which may raise exceptions.
 """
+import logging
+import sys
+
+
+log = logging.getLogger(__name__)
 
 
 class ExceptionManager(object):
@@ -38,6 +43,7 @@ class ExceptionManager(object):
             context_manager: A context manager to wrap the block in.
         """
         self.success = False
+        self.exc_info = None
         self.exceptions_to_suppress = exceptions_to_suppress
         self.setup = setup
         self.sub_context_manager = context_manager() if context_manager else None
@@ -54,6 +60,7 @@ class ExceptionManager(object):
             try:
                 sub_context_manager_suppressed = self.sub_context_manager.__exit__(exc_type, exc_value, exc_traceback)
             except self.exceptions_to_suppress:
+                self.exc_info = sys.exc_info()
                 return True  # Supress it.
             # If the sub_context_manager raises any other exception let it propogate.
             else:
@@ -63,6 +70,7 @@ class ExceptionManager(object):
 
         if exc_type:
             if exc_type in self.exceptions_to_suppress:
+                self.exc_info = (exc_type, exc_value, exc_traceback)
                 return True  # Suppress it.
             else:
                 return False # Do not suppress it.
@@ -106,5 +114,6 @@ def exception_managers_until_success(exceptions_to_retry=(), delay=0, max_attemp
         if exception_manager.success is True:
             return
 
+        log.error('Error on attempt %d. Retrying.', attempt, exc_info=exception_manager.exc_info)
         if delay:
             time.sleep(delay)
