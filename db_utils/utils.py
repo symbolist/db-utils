@@ -7,18 +7,33 @@ retrying blocks of code which may raise exceptions.
 class Call(object):
     """
     A context manager which can suppress exceptions.
-    
+
     If the block of code or the wrapped context manager raise any of these
     exceptions self.success is set to False. Otherwise it is True.
+
+    Usage:
+        with Call(exceptions_to_suppress=(ConnectionError,) setup=authentication_func, context_manager=time_block) as call:
+           post_data()
+
+        if call.success:
+            print 'Sending data worked!'
+        else:
+            print 'Sending data failed.'
+
+    In this example, first authentication_func is called. Then the block is
+    called in the time_block context manager. If post_data or the
+    time_block context manager raises a ConnectionError, call.success
+    will be False. Otherwise, it will be True.
     """
     def __init__(self, exceptions_to_suppress=(), setup=None, context_manager=None):
         """
         Create the context manager.
-        
+
         Args:
-            exceptions_to_suppress (tuple): A tuple of exceptions to suppress.
+            exceptions_to_suppress (tuple): A tuple of exceptions to suppress. If
+                any of these exceptions are raised, self.success is set to False.
             setup (function): A function to execute when entering context.
-            context_manager: A context manager to wrap around.        
+            context_manager: A context manager to wrap the block in.
         """
         self.success = False
         self.exceptions_to_suppress = exceptions_to_suppress
@@ -57,21 +72,25 @@ def attempts_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, cont
     """
     A generator which can be used to retry a block of code in case the block
     raises an exception.
-    
-    It returns a series of context managers which should be used to wrap the
-    block of code.
-    
+
+    It returns a series of context managers, which should be used to wrap the
+    block of code, and continues to do so until the block of code executes
+    without raising any exceptions from the exceptions_to_retry tuple.
+
     Args:
-        exceptions (tuple): A tuple of exceptions to catch.
+        exceptions (tuple): A tuple of exceptions to catch and retry on.
         delay (float): Time to wait between attempts.
         max_attempts (int): Number of times to attempt the block.
+        context_manager: A context manager to wrap the block in. Exceptions
+            raised by the context_manager also cause a retry.
+        setup (func): A func to call before executing the block.
 
-    For example:
-    for call in calls_until_success(exceptions=(DatabaseError,), retries=3):
-        with call:
-            submission = Submission(user=user, text=text)
-            submission.save()
-    
+    Usage:
+        for call in calls_until_success(exceptions=(DatabaseError,), retries=3):
+            with call:
+                submission = Submission(user=user, text=text)
+                submission.save()
+
     In case there are any DatabaseErrors, the block will be tried up to 3 times.
     """
     for attempt in xrange(1, max_attempts + 1):

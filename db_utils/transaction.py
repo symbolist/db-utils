@@ -46,11 +46,15 @@ def commit_open_transactions(transactions_to_close=TRANSACTIONS_TO_CLOSE):
 
 def set_mode_read_committed(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     """
-    Commit any open transaction and if database is MySQL set isolation level
+    Commit open transactions and if database is MySQL set isolation level
     of next transaction to READ COMMITTED.
 
-    Raises TransactionManagementError if more than 1 level of transactions
-    are open.
+    Args:
+        transactions_to_close (int): number of transactions to close.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
     """
 
     # The isolation level cannot be changed while a transaction is in
@@ -58,19 +62,21 @@ def set_mode_read_committed(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     commit_open_transactions(transactions_to_close=transactions_to_close)
 
     if connection.vendor == 'mysql':
-        # The isolation level cannot be changed while a transaction is in
-        # progress. So we close any existing one.    
         cursor = connection.cursor()
         cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
 
 def set_mode_repeatable_read(transactions_to_close=TRANSACTIONS_TO_CLOSE):
     """
-    Commit any open transaction but assume that the default isolation level
-    of MySQL is REPEATABLE READ and so do not try to set it again.
+    Commit open transactions and if database is MySQL set isolation level
+    of next transaction to REPEATABLE READ.
 
-    Raises TransactionManagementError if more than 1 level of transactions
-    are open.
+    Args:
+        transactions_to_close (int): number of transactions to close.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
     """
     # The isolation level cannot be changed while a transaction is in
     # progress. So we close any existing ones.
@@ -81,19 +87,18 @@ def set_mode_repeatable_read(transactions_to_close=TRANSACTIONS_TO_CLOSE):
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
 
 
-def commit_on_success_with_isolation_level(  # pylint: disable=invalid-name
-    isolation_level_setup_func=set_mode_repeatable_read, exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS
+def commit_on_success_with_isolation_level(
+    isolation_level_setup=set_mode_repeatable_read, exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS
 ):
     """
     Decorator factory which accepts a function to set an isolation level,
     executes it and then runs the decorated function inside a
     commit_on_success context manager.
-    
     If an exception which is in the exceptions tuple is raised, the above is
     retried after a delay.
     
     Args:
-        isolation_level_setup_func (function): A function to setup the
+        isolation_level_setup (function): A function to setup the
             the isolation level.
         exceptions (tuple): A tuple of exceptions to catch.
         delay (float): Time to wait between attempts.
@@ -109,7 +114,7 @@ def commit_on_success_with_isolation_level(  # pylint: disable=invalid-name
 
             for attempt in xrange(1, max_attempts + 1):
                 try:
-                    isolation_level_setup_func()
+                    isolation_level_setup()
                     with transaction.commit_on_success():
                         return func(*args, **kwargs)
                 except exceptions:
@@ -136,15 +141,16 @@ def commit_on_success_with_repeatable_read(
     If an exception, from the exceptions tuple is raised, the above is
     retried after a delay.
 
-    Raises TransactionManagementError if more than 1 levels of transactions
-    are open.
-
     Note: The isolation level is only changed on MySQL.
 
     Args:
         exceptions (tuple): A tuple of exceptions to catch.
         delay (float): Time to wait between attempts.
         max_attempts (int): Number of times to attempt the decorated function.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
     """
     return commit_on_success_with_isolation_level(
         isolation_level_setup=partial(set_mode_repeatable_read, transactions_to_close),
@@ -164,15 +170,15 @@ def commit_on_success_with_read_committed(
     If an exception, from the exceptions tuple is raised, the above is
     retried after a delay.
 
-    Raises TransactionManagementError if more than 1 levels of transactions
-    are open.
-
     Args:
         exceptions (tuple): A tuple of exceptions to catch.
         delay (float): Time to wait between attempts.
         max_attempts (int): Number of times to attempt the decorated function.
-    """
 
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
+    """
     return commit_on_success_with_isolation_level(
         isolation_level_setup=partial(set_mode_read_committed, transactions_to_close),
         exceptions=exceptions,
@@ -186,6 +192,34 @@ def repeatable_read_transactions(
         transactions_to_close=TRANSACTIONS_TO_CLOSE,
     ):
     """
+    A generator which can be used to retry a block of code in case the block
+    raises IntegrityErrors.
+
+    It returns a series of context managers, which should be used to wrap the
+    block of code, and continues to do so until the block of code executes
+    without raising any exceptions from the exceptions_to_retry tuple.
+
+    The block of code is executed in a REPEATABLE READ transaction. Because
+    changing the isolation level requires that no transactions be in progress,
+    all existing ones need to be closed. If this pattern is used in a place
+    where transactions may be open, the transactions_to_close parameter should
+    be set to the appropriate number.
+
+    Args:
+        exceptions_to_retry (tuple): A tuple of exceptions to catch.
+        delay (float): Time to wait between attempts.
+        max_attempts (int): Number of times to attempt the block.
+        transactions_to_close (int): Number of open transactions to close.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
+
+    Usage:
+        for transaction_manager in repeatable_read_transactions(transactions_to_close=1):
+            with transaction_manager:
+                submission = Submission(user=user, text=text)
+                submission.save()
     """
     setup = partial(set_mode_repeatable_read, transactions_to_close)
     return attempts_until_success(
@@ -199,6 +233,34 @@ def read_committed_transactions(
         transactions_to_close=TRANSACTIONS_TO_CLOSE,
     ):
     """
+    A generator which can be used to retry a block of code in case the block
+    raises IntegrityErrors.
+
+    It returns a series of context managers, which should be used to wrap the
+    block of code, and continues to do so until the block of code executes
+    without raising any exceptions from the exceptions_to_retry tuple.
+
+    The block of code is executed in a READ COMMITTED transaction. Because
+    changing the isolation level requires that no transactions be in progress,
+    all existing ones need to be closed. If this pattern is used in a place
+    where transactions may be open, the transactions_to_close parameter should
+    be set to the appropriate number.
+
+    Args:
+        exceptions_to_retry (tuple): A tuple of exceptions to catch.
+        delay (float): Time to wait between attempts.
+        max_attempts (int): Number of times to attempt the block.
+        transactions_to_close (int): Number of open transactions to close.
+
+    Raises:
+        TransactionManagementError if more than 'transactions_to_close'
+        nested transactions are open.
+
+    Usage:
+        for transaction_manager in read_committed_transactions(transactions_to_close=1):
+            with transaction_manager:
+                submission = Submission(user=user, text=text)
+                submission.save()
     """
     setup = partial(set_mode_read_committed, transactions_to_close)
     return attempts_until_success(
