@@ -4,7 +4,7 @@ import ddt
 
 from django.test import TestCase
 
-from db_utils.utils import ExceptionManager, attempts_until_success
+from db_utils.utils import ExceptionManager, exception_managers_until_success
 
 
 def mock_func():
@@ -133,7 +133,7 @@ class ExceptionManagerTestCase(TestCase):
 @ddt.ddt
 class RetryPatternTestCase(TestCase):
     """
-    Tests the retry pattern.
+    Tests the exception_managers_until_success generator.
     """
 
     @ddt.data(
@@ -144,8 +144,8 @@ class RetryPatternTestCase(TestCase):
     def test_success(self, exceptions_to_raise, exceptions_to_retry):
 
         mock_func.exceptions_to_raise = exceptions_to_raise
-        for attempt in attempts_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
-            with attempt:
+        for exception_manager in exception_managers_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
+            with exception_manager:
                 mock_func()
 
     @ddt.data(
@@ -157,6 +157,6 @@ class RetryPatternTestCase(TestCase):
 
         mock_func.exceptions_to_raise = exceptions_to_raise
         with self.assertRaises(exception_to_assert):
-            for attempt in attempts_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
-                with attempt:
+            for exception_manager in exception_managers_until_success(exceptions_to_retry=exceptions_to_retry, max_attempts=3):
+                with exception_manager:
                     mock_func()

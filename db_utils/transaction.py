@@ -10,7 +10,7 @@ from functools import partial, wraps
 
 from django.db import connection, transaction, IntegrityError
 
-from utils import attempts_until_success
+from utils import exception_managers_until_success
 
 
 log = logging.getLogger(__name__)
@@ -222,7 +222,7 @@ def repeatable_read_transactions(
                 submission.save()
     """
     setup = partial(set_mode_repeatable_read, transactions_to_close)
-    return attempts_until_success(
+    return exception_managers_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
         context_manager=transaction.commit_on_success, setup=setup,
     )
@@ -263,7 +263,7 @@ def read_committed_transactions(
                 submission.save()
     """
     setup = partial(set_mode_read_committed, transactions_to_close)
-    return attempts_until_success(
+    return exception_managers_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
         context_manager=transaction.commit_on_success, setup=setup,
     )

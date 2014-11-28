@@ -70,7 +70,7 @@ class ExceptionManager(object):
         self.success = True
 
 
-def attempts_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, context_manager=None, setup=None):
+def exception_managers_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, context_manager=None, setup=None):
     """
     A generator which can be used to retry a block of code in case the block
     raises an exception.
@@ -79,17 +79,19 @@ def attempts_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, cont
     block of code, and continues to do so until the block of code executes
     without raising any exceptions from the exceptions_to_retry tuple.
 
+    No exceptions are caught in the last attempt.
+
     Args:
         exceptions (tuple): A tuple of exceptions to catch and retry on.
         delay (float): Time to wait between attempts.
         max_attempts (int): Number of times to attempt the block.
         context_manager: A context manager to wrap the block in. Exceptions
-            raised by the context_manager also cause a retry.
+            raised by the context_manager also result in a retry.
         setup (func): A func to call before executing the block.
 
     Usage:
-        for call in calls_until_success(exceptions=(DatabaseError,), retries=3):
-            with call:
+        for exception_manager in exception_managers_until_success(exceptions=(DatabaseError,), retries=3):
+            with exception_manager:
                 submission = Submission(user=user, text=text)
                 submission.save()
 
