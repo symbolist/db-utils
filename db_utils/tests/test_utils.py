@@ -4,7 +4,7 @@ import ddt
 
 from django.test import TestCase
 
-from db_utils.utils import Call, attempts_until_success
+from db_utils.utils import ExceptionManager, attempts_until_success
 
 
 def mock_func():
@@ -32,9 +32,9 @@ class MockContextManager(object):
 
 
 @ddt.ddt
-class CallTestCase(TestCase):
+class ExceptionManagerTestCase(TestCase):
     """
-    Test the Call context manager.
+    Test the ExceptionManager.
     """
 
     @ddt.data(
@@ -50,10 +50,10 @@ class CallTestCase(TestCase):
     ):
 
         mock_func.exceptions_to_raise = exceptions_to_raise
-        with Call(exceptions_to_suppress=exceptions_to_suppress) as call:
+        with ExceptionManager(exceptions_to_suppress=exceptions_to_suppress) as exception_manager:
             mock_func()
 
-        self.assertEqual(success, call.success)
+        self.assertEqual(success, exception_manager.success)
 
     @ddt.data(
         ((KeyError,), ()),
@@ -66,10 +66,10 @@ class CallTestCase(TestCase):
 
         mock_func.exceptions_to_raise = exceptions_to_raise
         with self.assertRaises(exceptions_to_raise[0]):
-            with Call(exceptions_to_suppress=exceptions_to_suppress) as call:
+            with ExceptionManager(exceptions_to_suppress=exceptions_to_suppress) as exception_manager:
                 mock_func()
 
-        self.assertFalse(call.success)
+        self.assertFalse(exception_manager.success)
 
     @ddt.data(
         (True, (), (), (), None),
@@ -94,13 +94,13 @@ class CallTestCase(TestCase):
         MockContextManager.exceptions_to_suppress = exceptions_to_suppress_by_cm
         MockContextManager.exception_to_raise = exception_to_raise_by_cm
 
-        with Call(
+        with ExceptionManager(
             exceptions_to_suppress=exceptions_to_suppress,
             context_manager=MockContextManager
-        ) as call:
+        ) as exception_manager:
             mock_func()
 
-        self.assertEqual(success, call.success)
+        self.assertEqual(success, exception_manager.success)
 
     @ddt.data(
         ((), (ValueError,), (KeyError,), AttributeError, AttributeError),
@@ -121,13 +121,13 @@ class CallTestCase(TestCase):
         MockContextManager.exception_to_raise = exception_to_raise_by_cm
 
         with self.assertRaises(exception_to_assert):
-            with Call(
+            with ExceptionManager(
                 exceptions_to_suppress=exceptions_to_suppress,
                 context_manager=MockContextManager
-            ) as call:
+            ) as exception_manager:
                 mock_func()
 
-        self.assertFalse(call.success)
+        self.assertFalse(exception_manager.success)
 
 
 @ddt.ddt

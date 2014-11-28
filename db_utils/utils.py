@@ -4,25 +4,27 @@ retrying blocks of code which may raise exceptions.
 """
 
 
-class Call(object):
+class ExceptionManager(object):
     """
-    A context manager which can suppress exceptions.
+    A context manager which can catch and suppress exceptions.
 
     If the block of code or the wrapped context manager raise any of these
     exceptions self.success is set to False. Otherwise it is True.
 
     Usage:
-        with Call(exceptions_to_suppress=(ConnectionError,) setup=authentication_func, context_manager=time_block) as call:
+        with ExceptionManager(
+            exceptions_to_suppress=(ConnectionError,) setup=authentication_func, context_manager=time_block
+        ) as exception_manager:
            post_data()
 
-        if call.success:
+        if exception_manager.success:
             print 'Sending data worked!'
         else:
             print 'Sending data failed.'
 
     In this example, first authentication_func is called. Then the block is
     called in the time_block context manager. If post_data or the
-    time_block context manager raises a ConnectionError, call.success
+    time_block context manager raises a ConnectionError, exception_manager.success
     will be False. Otherwise, it will be True.
     """
     def __init__(self, exceptions_to_suppress=(), setup=None, context_manager=None):
@@ -95,11 +97,11 @@ def attempts_until_success(exceptions_to_retry=(), delay=0, max_attempts=3, cont
     """
     for attempt in xrange(1, max_attempts + 1):
         if attempt < max_attempts:
-            call = Call(exceptions_to_retry, setup, context_manager)
+            exception_manager = ExceptionManager(exceptions_to_retry, setup, context_manager)
         else:
-            call = Call((), setup, context_manager)
-        yield call
-        if call.success is True:
+            exception_manager = ExceptionManager((), setup, context_manager)
+        yield exception_manager
+        if exception_manager.success is True:
             return
 
         if delay:
