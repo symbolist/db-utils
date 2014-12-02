@@ -1,12 +1,13 @@
 """Tests for db module."""
 
 import ddt
+from mock import patch
 import threading
 import time
 import unittest
 
 from django.contrib.auth.models import User
-from django.db import connection, IntegrityError
+from django.db import connection, DatabaseError, IntegrityError
 from django.db.transaction import commit_on_success, TransactionManagementError
 from django.test import TestCase, TransactionTestCase
 
@@ -16,6 +17,11 @@ from db_utils.transaction import (
 )
 
 from test_utils import mock_func
+
+
+def do_nothing():
+    """Just return."""
+    return
 
 
 @ddt.ddt
@@ -79,22 +85,52 @@ class TransactionDecoratorTestCase(TransactionTestCase):
         self.assertIsNone(thread2.status.get('exception'))
         self.assertEqual(thread2.status.get('created'), created_in_2)
 
-    def test_transaction_nesting(self):
-        """Test that the decorator raises an error if there are already more than 1 levels of nested transactions."""
+    @ddt.data(
+        (commit_on_success_with_read_committed,),
+        (commit_on_success_with_repeatable_read,),
+    )
+    @ddt.unpack
+    def test_decoraters_nesting_success(self, decorator):
+        """
+        Test that the decorator works if transactions_to_close > number of
+        open nested transactions.
+        """
 
         if connection.vendor != 'mysql':
             raise unittest.SkipTest('Only works on MySQL.')
 
-        def do_nothing():
-            """Just return."""
-            return
-
-        commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()
+        decorator()(do_nothing)()
 
         with commit_on_success():
-            commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()
+            User.objects.get_or_create(username='student1', email='student1@edx.org')
+            decorator()(do_nothing)()
 
-        with self.assertRaises(TransactionManagementError):
+        with commit_on_success():
+            User.objects.get_or_create(username='student2', email='student2@edx.org')
             with commit_on_success():
+                User.objects.get_or_create(username='student3', email='student3@edx.org')
+                decorator()(do_nothing)()
+
+    @ddt.data(
+        (commit_on_success_with_read_committed,),
+        (commit_on_success_with_repeatable_read,),
+    )
+    @ddt.unpack
+    @patch('db_utils.transaction.commit_open_transactions')
+    def test_decoraters_database_errors(self, decorator, mock_commit_open_transactions):
+        """
+        Test that the decorator raises DatabaseError if open transactions
+        are not committed before attempting to change isolation level.
+
+        This case will not happen in the normal code flow. This test just
+        verifies that the isolation levels are being changed.
+        """
+
+        if connection.vendor != 'mysql':
+            raise unittest.SkipTest('Only works on MySQL.')
+
+        with self.assertRaisesRegexp(DatabaseError, "Transaction isolation level can't be changed while a transaction is in progress"):
+            with commit_on_success():
+                User.objects.get_or_create(username='student', email='student@edx.org')
                 with commit_on_success():
-                    commit_on_success_with_read_committed(transactions_to_close=1)(do_nothing)()
+                    decorator()(do_nothing)()
