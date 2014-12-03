@@ -25,7 +25,7 @@ def do_nothing():
 
 
 @ddt.ddt
-class TransactionDecoratorTestCase(TransactionTestCase):
+class TransactionDecoratorsTestCase(TransactionTestCase):
     """
     Tests the decorators.
     """
@@ -134,3 +134,35 @@ class TransactionDecoratorTestCase(TransactionTestCase):
                 User.objects.get_or_create(username='student', email='student@edx.org')
                 with commit_on_success():
                     decorator()(do_nothing)()
+
+
+@ddt.ddt
+class TransactionRetryPatternTestCase(TestCase):
+    """
+    Tests the repeatable_read_transactions and read_committed_transactions generator.
+    """
+
+    @ddt.data(
+        (repeatable_read_transactions, (IntegrityError,)),
+        (read_committed_transactions, (IntegrityError,)),
+    )
+    @ddt.unpack
+    def test_success(self, transaction_manager_generator, exceptions_to_raise):
+
+        mock_func.exceptions_to_raise = exceptions_to_raise
+        for transaction_manager in transaction_manager_generator():
+            with transaction_manager:
+                mock_func()
+
+    @ddt.data(
+        (repeatable_read_transactions, (IntegrityError, IntegrityError), IntegrityError),
+        (read_committed_transactions, (IntegrityError, IntegrityError), IntegrityError),
+    )
+    @ddt.unpack
+    def test_failure(self, transaction_manager_generator, exceptions_to_raise, exception_to_assert):
+
+        mock_func.exceptions_to_raise = exceptions_to_raise
+        with self.assertRaises(exception_to_assert):
+            for transaction_manager in transaction_manager_generator(max_attempts=2):
+                with transaction_manager:
+                    mock_func()

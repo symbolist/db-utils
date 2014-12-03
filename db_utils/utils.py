@@ -4,6 +4,7 @@ retrying blocks of code which may raise exceptions.
 """
 import logging
 import sys
+import time
 
 
 log = logging.getLogger(__name__)

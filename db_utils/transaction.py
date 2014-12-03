@@ -67,7 +67,7 @@ def set_mode_repeatable_read():
 
 
 def commit_on_success_with_isolation_level(
-    isolation_level_setup=set_mode_repeatable_read, exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS
+    isolation_level_setup, exceptions=DATABASE_EXCEPTIONS, delay=DELAY, max_attempts=MAX_ATTEMPTS
 ):
     """
     Decorator factory which accepts a function to set an isolation level,
