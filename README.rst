@@ -2,6 +2,32 @@ Part of `edX code`__.
 
 __ http://code.edx.org/
 
+The isolation levels are changed only on MySQL.
+
+Tests
+-----
+
+Setup the database:
+
+.. code:: mysql
+
+  CREATE DATABASE dbutils;
+  CREATE USER 'dbutils'@'localhost' IDENTIFIED BY 'password';
+  GRANT ALL PRIVILEGES ON *.* TO 'dbutils'@'localhost';
+
+Install the python requirements:
+
+.. code:: bash
+
+  pip install -r requirements.txt
+
+
+Run the tests:
+
+.. code:: bash
+
+  python runtests.py
+
 License
 -------
 

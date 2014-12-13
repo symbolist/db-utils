@@ -16,7 +16,7 @@ DEFAULT_SETTINGS = dict(
         "default": {
             "ENGINE": "django.db.backends.mysql",
             "HOST": "localhost",
-            "NAME": "edxapp",
+            "NAME": "dbutils",
             "PASSWORD": "password",
             "PORT": "3306",
             "USER": "dbutils"

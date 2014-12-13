@@ -5,6 +5,7 @@ DatabaseErrors.
 """
 
 import logging
+import time
 
 from functools import partial, wraps
 
