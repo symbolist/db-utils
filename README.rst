@@ -14,6 +14,7 @@ Setup the database:
   CREATE DATABASE dbutils;
   CREATE USER 'dbutils'@'localhost' IDENTIFIED BY 'password';
   GRANT ALL PRIVILEGES ON *.* TO 'dbutils'@'localhost';
+  CREATE DATABASE dbutils;
 
 Install the python requirements:
 
