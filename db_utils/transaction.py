@@ -4,11 +4,13 @@ REPEATABLE READ and READ COMMITTED transactions and retrying in case of
 DatabaseErrors.
 """
 
+from contextlib import contextmanager
 import logging
 import time
 
 from functools import partial, wraps
 
+from django.conf import settings
 from django.db import connection, transaction, IntegrityError
 
 from utils import exception_managers_until_success
@@ -19,6 +21,18 @@ log = logging.getLogger(__name__)
 DATABASE_EXCEPTIONS = (IntegrityError,)
 DELAY = 0.1
 MAX_ATTEMPTS = 3
+
+
+@contextmanager
+def mock_commit_on_success():
+    yield
+
+
+def transaction_context_manager():
+    if getattr(settings, 'DB_UTILS_ENABLE_TRANSACTIONS', True):
+        return transaction.commit_on_success
+    else:
+        return mock_commit_on_success
 
 
 def commit_open_transactions():
@@ -39,6 +53,8 @@ def set_mode_read_committed():
     Commit open transactions and if database is MySQL set isolation level
     of next transaction to READ COMMITTED.
     """
+    if not getattr(settings, 'DB_UTILS_ENABLE_TRANSACTIONS', True):
+        return
 
     # The isolation level cannot be changed while a transaction is in
     # progress. So we close any existing ones.
@@ -56,6 +72,9 @@ def set_mode_repeatable_read():
     Commit open transactions and if database is MySQL set isolation level
     of next transaction to REPEATABLE READ.
     """
+    if not getattr(settings, 'DB_UTILS_ENABLE_TRANSACTIONS', True):
+        return
+
     # The isolation level cannot be changed while a transaction is in
     # progress. So we close any existing ones.
     commit_open_transactions()
@@ -95,7 +114,7 @@ def commit_on_success_with_isolation_level(
             for attempt in xrange(1, max_attempts + 1):
                 try:
                     isolation_level_setup()
-                    with transaction.commit_on_success():
+                    with transaction_context_manager()():
                         return func(*args, **kwargs)
                 except exceptions:
                     if attempt == max_attempts:
@@ -195,7 +214,7 @@ def repeatable_read_transactions(
     """
     return exception_managers_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
-        context_manager=transaction.commit_on_success, setup=set_mode_repeatable_read,
+        context_manager=transaction_context_manager(), setup=set_mode_repeatable_read,
     )
 
 
@@ -231,5 +250,5 @@ def read_committed_transactions(
     """
     return exception_managers_until_success(
         exceptions_to_retry=exceptions_to_retry, delay=delay, max_attempts=max_attempts,
-        context_manager=transaction.commit_on_success, setup=set_mode_read_committed,
+        context_manager=transaction_context_manager(), setup=set_mode_read_committed,
     )
